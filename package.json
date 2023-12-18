@@ -1,5 +1,5 @@
 {
-  "name": "@vinejs/vine",
+  "name": "@nemoengineering/vine",
   "description": "Form data validation library for Node.js",
   "version": "1.7.1",
   "engines": {
@@ -79,7 +79,7 @@
   "homepage": "https://github.com/vinejs/vine#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vinejs/vine.git"
+    "url": "git+https://github.com/nemoengineering/vine.git"
   },
   "bugs": {
     "url": "https://github.com/vinejs/vine/issues"

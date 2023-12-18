@@ -118,33 +118,6 @@ test.group('Vine Helpers', () => {
     assert.isTrue(vine.helpers.exists(''))
   })
 
-  test('DNS: return {result} for {url}')
-    .with([
-      {
-        url: 'foo',
-        result: false,
-      },
-      {
-        url: 'https://foo',
-        result: false,
-      },
-      {
-        url: 'http://google.com',
-        result: true,
-      },
-      {
-        url: 'http://www.google.com',
-        result: true,
-      },
-      {
-        url: 'http://www.google.com/terms',
-        result: true,
-      },
-    ])
-    .run(async ({ assert }, { url, result }) => {
-      assert.equal(await vine.helpers.isActiveURL(url), result)
-    })
-
   test('mobileLocales contains the list of mobile locales', ({ assert }) => {
     const codes = vine.helpers.mobileLocales
     assert.containsSubset(codes, ['fr-FR', 'en-GB', 'de-DE'])

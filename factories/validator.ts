@@ -7,7 +7,7 @@
  * file that was distributed with this source code.
  */
 
-import { AssertionError, deepEqual } from 'node:assert'
+import { AssertionError, deepEqual } from 'assert' // eslint-disable-line
 
 import { FieldFactory } from './field.js'
 import type { FieldContext, Validation } from '../src/types.js'

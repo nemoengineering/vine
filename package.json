@@ -63,9 +63,11 @@
     "zod": "^3.22.4"
   },
   "dependencies": {
+    "@i2labs/dns": "^1.0.1",
     "@poppinss/macroable": "^1.0.0",
     "@types/validator": "^13.11.7",
     "@vinejs/compiler": "^2.3.0",
+    "assert": "^2.1.0",
     "camelcase": "^8.0.0",
     "dayjs": "^1.11.10",
     "dlv": "^1.1.3",

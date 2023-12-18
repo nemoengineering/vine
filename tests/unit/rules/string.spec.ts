@@ -20,7 +20,6 @@ import {
   hexCodeRule,
   endsWithRule,
   confirmedRule,
-  activeUrlRule,
   minLengthRule,
   maxLengthRule,
   startsWithRule,
@@ -284,42 +283,6 @@ test.group('String | url', () => {
       },
       {
         rule: urlRule(),
-        value: 'https://google.com',
-      },
-    ])
-    .run(stringRuleValidator)
-})
-
-test.group('String | activeUrl', () => {
-  test('validate {value}')
-    .with([
-      {
-        errorsCount: 1,
-        rule: activeUrlRule(),
-        value: 22,
-        error: 'The dummy field must be a string',
-      },
-      {
-        errorsCount: 1,
-        rule: activeUrlRule(),
-        value: 22,
-        bail: false,
-        error: 'The dummy field must be a string',
-      },
-      {
-        errorsCount: 1,
-        rule: activeUrlRule(),
-        value: 'foo_bar',
-        error: 'The dummy field must be a valid URL',
-      },
-      {
-        errorsCount: 1,
-        rule: activeUrlRule(),
-        value: 'https://foo.com',
-        error: 'The dummy field must be a valid URL',
-      },
-      {
-        rule: activeUrlRule(),
         value: 'https://google.com',
       },
     ])

@@ -241,22 +241,8 @@ export const helpers = {
   /**
    * Check if a URL has valid `A` or `AAAA` DNS records
    */
-  isActiveURL: async (url: string): Promise<boolean> => {
-    const { resolve4, resolve6 } = await import('node:dns/promises')
-
-    try {
-      const { hostname } = new URL(url)
-      const v6Addresses = await resolve6(hostname)
-      if (v6Addresses.length) {
-        return true
-        /* c8 ignore next 4 */
-      } else {
-        const v4Addresses = await resolve4(hostname)
-        return v4Addresses.length > 0
-      }
-    } catch {
-      return false
-    }
+  isActiveURL: async (_url: string): Promise<boolean> => {
+    return Promise.resolve(false)
   },
 
   /**

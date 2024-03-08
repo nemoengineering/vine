@@ -142,7 +142,7 @@ export class OptionalModifier<Schema extends BaseModifiersType<any, any>> extend
 /**
  * Modifies the schema type to allow custom transformed values
  */
-class TransformModifier<
+export class TransformModifier<
   Schema extends BaseModifiersType<any, any>,
   Output,
 > extends BaseModifiersType<Output, Output> {

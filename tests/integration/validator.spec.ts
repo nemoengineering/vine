@@ -141,7 +141,7 @@ test.group('Validator | extend schema classes', () => {
   })
 
   test('extend VineObject class', ({ assert }) => {
-    VineObject.macro('validatesEmail' as any, function (this: VineObject<any, any, any>) {
+    VineObject.macro('validatesEmail' as any, function (this: VineObject<any, any, any, any>) {
       return 'email' in this.getProperties()
     })
 
@@ -165,7 +165,7 @@ test.group('Validator | extend schema classes', () => {
   })
 
   test('extend VineTuple class', ({ assert }) => {
-    VineTuple.macro('atLeastOne' as any, function (this: VineTuple<any, any, any>) {
+    VineTuple.macro('atLeastOne' as any, function (this: VineTuple<any, any, any, any>) {
       return true
     })
 

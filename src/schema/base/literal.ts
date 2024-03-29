@@ -11,23 +11,29 @@ import camelcase from 'camelcase'
 import Macroable from '@poppinss/macroable'
 import type { LiteralNode, RefsStore } from '@vinejs/compiler/types'
 
-import { OTYPE, COTYPE, PARSE, VALIDATION } from '../../symbols.js'
+import { OTYPE, COTYPE, PARSE, VALIDATION, ITYPE } from '../../symbols.js'
 import type {
   Parser,
   Validation,
   RuleBuilder,
   Transformer,
+  FieldContext,
   FieldOptions,
   ParserOptions,
   ConstructableSchema,
+  ComparisonOperators,
+  ArrayComparisonOperators,
+  NumericComparisonOperators,
 } from '../../types.js'
+import { requiredWhen } from './rules.js'
+import { helpers } from '../../vine/helpers.js'
 
 /**
  * Base schema type with only modifiers applicable on all the schema types.
  */
-abstract class BaseModifiersType<Output, CamelCaseOutput>
+abstract class BaseModifiersType<Input, Output, CamelCaseOutput>
   extends Macroable
-  implements ConstructableSchema<Output, CamelCaseOutput>
+  implements ConstructableSchema<Input, Output, CamelCaseOutput>
 {
   /**
    * Each subtype should implement the compile method that returns
@@ -41,6 +47,11 @@ abstract class BaseModifiersType<Output, CamelCaseOutput>
   abstract clone(): this
 
   /**
+   * Define the input type of the schema
+   */
+  declare [ITYPE]: Input;
+
+  /**
    * The output value of the field. The property points to a type only
    * and not the real value.
    */
@@ -51,8 +62,8 @@ abstract class BaseModifiersType<Output, CamelCaseOutput>
    * Mark the field under validation as optional. An optional
    * field allows both null and undefined values.
    */
-  optional(): OptionalModifier<this> {
-    return new OptionalModifier(this)
+  optional(validations?: Validation<any>[]): OptionalModifier<this> {
+    return new OptionalModifier(this, validations)
   }
 
   /**
@@ -80,11 +91,15 @@ abstract class BaseModifiersType<Output, CamelCaseOutput>
 /**
  * Modifies the schema type to allow null values
  */
-export class NullableModifier<Schema extends BaseModifiersType<any, any>> extends BaseModifiersType<
+export class NullableModifier<
+  Schema extends BaseModifiersType<any, any, any>,
+> extends BaseModifiersType<
+  Schema[typeof ITYPE] | null,
   Schema[typeof OTYPE] | null,
   Schema[typeof COTYPE] | null
 > {
   #parent: Schema
+
   constructor(parent: Schema) {
     super()
     this.#parent = parent
@@ -111,14 +126,194 @@ export class NullableModifier<Schema extends BaseModifiersType<any, any>> extend
 /**
  * Modifies the schema type to allow undefined values
  */
-export class OptionalModifier<Schema extends BaseModifiersType<any, any>> extends BaseModifiersType<
+export class OptionalModifier<
+  Schema extends BaseModifiersType<any, any, any>,
+> extends BaseModifiersType<
+  Schema[typeof ITYPE] | undefined | null,
   Schema[typeof OTYPE] | undefined,
   Schema[typeof COTYPE] | undefined
 > {
   #parent: Schema
-  constructor(parent: Schema) {
+
+  /**
+   * Optional modifier validations list
+   */
+  validations: Validation<any>[]
+
+  constructor(parent: Schema, validations?: Validation<any>[]) {
     super()
     this.#parent = parent
+    this.validations = validations || []
+  }
+
+  /**
+   * Shallow clones the validations. Since, there are no API's to mutate
+   * the validation options, we can safely copy them by reference.
+   */
+  protected cloneValidations(): Validation<any>[] {
+    return this.validations.map((validation) => {
+      return {
+        options: validation.options,
+        rule: validation.rule,
+      }
+    })
+  }
+
+  /**
+   * Compiles validations
+   */
+  protected compileValidations(refs: RefsStore) {
+    return this.validations.map((validation) => {
+      return {
+        ruleFnId: refs.track({
+          validator: validation.rule.validator,
+          options: validation.options,
+        }),
+        implicit: validation.rule.implicit,
+        isAsync: validation.rule.isAsync,
+      }
+    })
+  }
+
+  /**
+   * Push a validation to the validations chain.
+   */
+  use(validation: Validation<any> | RuleBuilder): this {
+    this.validations.push(VALIDATION in validation ? validation[VALIDATION]() : validation)
+    return this
+  }
+
+  /**
+   * Define a callback to conditionally require a field at
+   * runtime.
+   *
+   * The callback method should return "true" to mark the
+   * field as required, or "false" to skip the required
+   * validation
+   */
+  requiredWhen<Operator extends ComparisonOperators>(
+    otherField: string,
+    operator: Operator,
+    expectedValue: Operator extends ArrayComparisonOperators
+      ? (string | number | boolean)[]
+      : Operator extends NumericComparisonOperators
+        ? number
+        : string | number | boolean
+  ): this
+  requiredWhen(callback: (field: FieldContext) => boolean): this
+  requiredWhen(
+    otherField: string | ((field: FieldContext) => boolean),
+    operator?: ComparisonOperators,
+    expectedValue?: any
+  ) {
+    /**
+     * The equality check if self implemented
+     */
+    if (typeof otherField === 'function') {
+      return this.use(requiredWhen(otherField))
+    }
+
+    /**
+     * Creating the checker function based upon the
+     * operator used for the comparison
+     */
+    let checker: (value: any) => boolean
+    switch (operator!) {
+      case '=':
+        checker = (value) => value === expectedValue
+        break
+      case '!=':
+        checker = (value) => value !== expectedValue
+        break
+      case 'in':
+        checker = (value) => expectedValue.includes(value)
+        break
+      case 'notIn':
+        checker = (value) => !expectedValue.includes(value)
+        break
+      case '>':
+        checker = (value) => value > expectedValue
+        break
+      case '<':
+        checker = (value) => value < expectedValue
+        break
+      case '>=':
+        checker = (value) => value >= expectedValue
+        break
+      case '<=':
+        checker = (value) => value <= expectedValue
+    }
+
+    /**
+     * Registering rule with custom implementation
+     */
+    return this.use(
+      requiredWhen((field) => {
+        const otherFieldValue = helpers.getNestedValue(otherField, field)
+        return checker(otherFieldValue)
+      })
+    )
+  }
+
+  /**
+   * Mark the field under validation as required when all
+   * the other fields are present with value other
+   * than `undefined` or `null`.
+   */
+  requiredIfExists(fields: string | string[]) {
+    const fieldsToExist = Array.isArray(fields) ? fields : [fields]
+    return this.use(
+      requiredWhen((field) => {
+        return fieldsToExist.every((otherField) =>
+          helpers.exists(helpers.getNestedValue(otherField, field))
+        )
+      })
+    )
+  }
+
+  /**
+   * Mark the field under validation as required when any
+   * one of the other fields are present with non-nullable
+   * value.
+   */
+  requiredIfAnyExists(fields: string[]) {
+    return this.use(
+      requiredWhen((field) => {
+        return fields.some((otherField) =>
+          helpers.exists(helpers.getNestedValue(otherField, field))
+        )
+      })
+    )
+  }
+
+  /**
+   * Mark the field under validation as required when all
+   * the other fields are missing or their value is
+   * `undefined` or `null`.
+   */
+  requiredIfMissing(fields: string | string[]) {
+    const fieldsToExist = Array.isArray(fields) ? fields : [fields]
+    return this.use(
+      requiredWhen((field) => {
+        return fieldsToExist.every((otherField) =>
+          helpers.isMissing(helpers.getNestedValue(otherField, field))
+        )
+      })
+    )
+  }
+
+  /**
+   * Mark the field under validation as required when any
+   * one of the other fields are missing.
+   */
+  requiredIfAnyMissing(fields: string[]) {
+    return this.use(
+      requiredWhen((field) => {
+        return fields.some((otherField) =>
+          helpers.isMissing(helpers.getNestedValue(otherField, field))
+        )
+      })
+    )
   }
 
   /**
@@ -126,7 +321,7 @@ export class OptionalModifier<Schema extends BaseModifiersType<any, any>> extend
    * and wraps it inside the optional modifier
    */
   clone(): this {
-    return new OptionalModifier(this.#parent.clone()) as this
+    return new OptionalModifier(this.#parent.clone(), this.cloneValidations()) as this
   }
 
   /**
@@ -135,6 +330,7 @@ export class OptionalModifier<Schema extends BaseModifiersType<any, any>> extend
   [PARSE](propertyName: string, refs: RefsStore, options: ParserOptions): LiteralNode {
     const output = this.#parent[PARSE](propertyName, refs, options)
     output.isOptional = true
+    output.validations = output.validations.concat(this.compileValidations(refs))
     return output
   }
 }
@@ -143,9 +339,9 @@ export class OptionalModifier<Schema extends BaseModifiersType<any, any>> extend
  * Modifies the schema type to allow custom transformed values
  */
 export class TransformModifier<
-  Schema extends BaseModifiersType<any, any>,
+  Schema extends BaseModifiersType<any, any, any>,
   Output,
-> extends BaseModifiersType<Output, Output> {
+> extends BaseModifiersType<Schema[typeof ITYPE], Output, Output> {
   /**
    * The output value of the field. The property points to a type only
    * and not the real value.
@@ -184,7 +380,8 @@ export class TransformModifier<
  * The base type for creating a custom literal type. Literal type
  * is a schema type that has no children elements.
  */
-export abstract class BaseLiteralType<Output, CamelCaseOutput> extends BaseModifiersType<
+export abstract class BaseLiteralType<Input, Output, CamelCaseOutput> extends BaseModifiersType<
+  Input,
   Output,
   CamelCaseOutput
 > {

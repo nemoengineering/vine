@@ -9,7 +9,7 @@
 
 import type { CompilerNodes, RefsStore } from '@vinejs/compiler/types'
 
-import { OTYPE, COTYPE, PARSE, VALIDATION } from '../../symbols.js'
+import { ITYPE, OTYPE, COTYPE, PARSE, VALIDATION } from '../../symbols.js'
 import type {
   Parser,
   Validation,
@@ -23,9 +23,9 @@ import Macroable from '@poppinss/macroable'
 /**
  * Base schema type with only modifiers applicable on all the schema types.
  */
-export abstract class BaseModifiersType<Output, CamelCaseOutput>
+export abstract class BaseModifiersType<Input, Output, CamelCaseOutput>
   extends Macroable
-  implements ConstructableSchema<Output, CamelCaseOutput>
+  implements ConstructableSchema<Input, Output, CamelCaseOutput>
 {
   /**
    * Each subtype should implement the compile method that returns
@@ -37,6 +37,11 @@ export abstract class BaseModifiersType<Output, CamelCaseOutput>
    * The child class must implement the clone method
    */
   abstract clone(): this
+
+  /**
+   * Define the input type of the schema
+   */
+  declare [ITYPE]: Input;
 
   /**
    * The output value of the field. The property points to a type only
@@ -68,7 +73,10 @@ export abstract class BaseModifiersType<Output, CamelCaseOutput>
 /**
  * Modifies the schema type to allow null values
  */
-export class NullableModifier<Schema extends BaseModifiersType<any, any>> extends BaseModifiersType<
+export class NullableModifier<
+  Schema extends BaseModifiersType<any, any, any>,
+> extends BaseModifiersType<
+  Schema[typeof ITYPE] | null,
   Schema[typeof OTYPE] | null,
   Schema[typeof COTYPE] | null
 > {
@@ -102,7 +110,10 @@ export class NullableModifier<Schema extends BaseModifiersType<any, any>> extend
 /**
  * Modifies the schema type to allow undefined values
  */
-export class OptionalModifier<Schema extends BaseModifiersType<any, any>> extends BaseModifiersType<
+export class OptionalModifier<
+  Schema extends BaseModifiersType<any, any, any>,
+> extends BaseModifiersType<
+  Schema[typeof ITYPE] | undefined | null,
   Schema[typeof OTYPE] | undefined,
   Schema[typeof COTYPE] | undefined
 > {
@@ -137,7 +148,8 @@ export class OptionalModifier<Schema extends BaseModifiersType<any, any>> extend
  * The BaseSchema class abstracts the repetitive parts of creating
  * a custom schema type.
  */
-export abstract class BaseType<Output, CamelCaseOutput> extends BaseModifiersType<
+export abstract class BaseType<Input, Output, CamelCaseOutput> extends BaseModifiersType<
+  Input,
   Output,
   CamelCaseOutput
 > {

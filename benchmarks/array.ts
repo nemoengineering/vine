@@ -1,8 +1,11 @@
 // @ts-ignore
 import Benchmark from 'benchmark'
 import { z } from 'zod'
-import yup from 'yup'
+import * as yup from 'yup'
 import vine from '../index.js'
+import * as valibot from 'valibot'
+import Joi from 'joi'
+import Ajv, { AsyncSchema } from 'ajv'
 
 function getData() {
   return {
@@ -54,6 +57,51 @@ const vineSchema = vine.compile(
   })
 )
 
+const valibotSchema = valibot.object({
+  contacts: valibot.array(
+    valibot.object({
+      type: valibot.string(),
+      value: valibot.string(),
+    })
+  ),
+})
+
+const joiSchema = Joi.object({
+  contacts: Joi.array()
+    .items(
+      Joi.object({
+        type: Joi.string().required(),
+        value: Joi.string().required(),
+      })
+    )
+    .required(),
+}).required()
+
+const ajv = new Ajv.default()
+interface AjvData {
+  contacts: [{ type: string; value: string }]
+}
+const ajvSchema: AsyncSchema = {
+  $async: true,
+  type: 'object',
+  properties: {
+    contacts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', nullable: false },
+          value: { type: 'string', nullable: false },
+        },
+        required: ['type', 'value'],
+      },
+    },
+  },
+  required: ['contacts'],
+  additionalProperties: false,
+}
+const ajvValidator = ajv.compile<AjvData>(ajvSchema)
+
 console.log('======================')
 console.log('Benchmarking arrays')
 console.log('======================')
@@ -76,6 +124,29 @@ suite
     defer: true,
     fn: function (deferred: any) {
       yupSchema.validate(getData()).then(() => deferred.resolve())
+    },
+  })
+  .add('Valibot', {
+    defer: true,
+    fn: function (deferred: any) {
+      valibot.parseAsync(valibotSchema, getData()).then(() => deferred.resolve())
+    },
+  })
+  .add('Joi', {
+    defer: true,
+    fn: function (deferred: any) {
+      joiSchema
+        .validateAsync(getData())
+        .then(() => deferred.resolve())
+        .catch(console.log)
+    },
+  })
+  .add('Ajv', {
+    defer: true,
+    fn: function (deferred: any) {
+      ajvValidator(getData())
+        .then(() => deferred.resolve())
+        .catch(console.log)
     },
   })
   .on('cycle', function (event: any) {

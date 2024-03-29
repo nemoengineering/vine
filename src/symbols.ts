@@ -10,7 +10,7 @@
 /**
  * The symbol to define a unique name for the schema type
  */
-export const UNIQUE_NAME = Symbol.for('schema_nme')
+export const UNIQUE_NAME = Symbol.for('schema_name')
 
 /**
  * The symbol to check if a value is of the given schema
@@ -22,6 +22,11 @@ export const IS_OF_TYPE = Symbol.for('is_of_type')
  * The symbol for the compile method
  */
 export const PARSE = Symbol.for('parse')
+
+/**
+ * The symbol for the opaque input type
+ */
+export const ITYPE = Symbol.for('opaque_input_type')
 
 /**
  * The symbol for the opaque type

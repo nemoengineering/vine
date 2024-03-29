@@ -2,6 +2,9 @@
 import Benchmark from 'benchmark'
 import { z } from 'zod'
 import vine from '../index.js'
+import * as valibot from 'valibot'
+import Joi from 'joi'
+import Ajv, { AsyncSchema } from 'ajv'
 
 function getData() {
   return {
@@ -46,6 +49,71 @@ const vineSchema = vine.compile(
   })
 )
 
+const valibotSchema = valibot.object({
+  contact: valibot.union([
+    valibot.object({
+      type: valibot.literal('email'),
+      email: valibot.string(),
+    }),
+    valibot.object({
+      type: valibot.literal('phone'),
+      mobile_number: valibot.string(),
+    }),
+  ]),
+})
+
+const joiSchema = Joi.object({
+  contact: Joi.alternatives()
+    .try(
+      Joi.object({ type: 'email', email: Joi.string().required() }),
+      Joi.object({ type: 'phone', mobile_number: Joi.string().required() })
+    )
+    .required(),
+}).required()
+
+const ajv = new Ajv.default({ discriminator: true })
+interface AjvEmail {
+  type: 'email'
+  email: string
+}
+interface AjvPhone {
+  type: 'phone'
+  mobile_number: string
+}
+interface AjvData {
+  contact: AjvEmail | AjvPhone
+}
+const ajvSchema: AsyncSchema = {
+  $async: true,
+  type: 'object',
+  properties: {
+    contact: {
+      type: 'object',
+      discriminator: { propertyName: 'type' },
+      required: ['type'],
+      oneOf: [
+        {
+          properties: {
+            type: { const: 'email' },
+            email: { type: 'string', nullable: false },
+          },
+          required: ['email'],
+        },
+        {
+          properties: {
+            type: { const: 'phone' },
+            mobile_number: { type: 'string', nullable: false },
+          },
+          required: ['mobile_number'],
+        },
+      ],
+    },
+  },
+  required: ['contact'],
+  additionalProperties: false,
+}
+const ajvValidator = ajv.compile<AjvData>(ajvSchema)
+
 console.log('=======================')
 console.log('Benchmarking unions')
 console.log('=======================')
@@ -62,6 +130,29 @@ suite
     defer: true,
     fn: function (deferred: any) {
       zodSchema.parseAsync(getData()).then(() => deferred.resolve())
+    },
+  })
+  .add('Valibot', {
+    defer: true,
+    fn: function (deferred: any) {
+      valibot.parseAsync(valibotSchema, getData()).then(() => deferred.resolve())
+    },
+  })
+  .add('Joi', {
+    defer: true,
+    fn: function (deferred: any) {
+      joiSchema
+        .validateAsync(getData())
+        .then(() => deferred.resolve())
+        .catch((err) => console.dir(err, { depth: 20, colors: true }))
+    },
+  })
+  .add('Ajv', {
+    defer: true,
+    fn: function (deferred: any) {
+      ajvValidator(getData())
+        .then(() => deferred.resolve())
+        .catch(console.log)
     },
   })
   .on('cycle', function (event: any) {
